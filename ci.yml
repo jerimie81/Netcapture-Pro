@@ -1,0 +1,71 @@
+name: NetCapture Pro CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # ── Shell Script Validation ───────────────────────────────────────
+  shell-lint:
+    name: Lint Installer Script
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck on install.sh
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './'
+          ignore_names: '.*' 
+
+  # ── Python Linting & Build Test ───────────────────────────────────
+  python-build-test:
+    name: Python Build & Lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libpcap-dev tshark wireshark-common
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Installing core dependencies based on netcapture.py and install.sh
+          pip install scapy rich manuf cryptography dpkt requests
+          # Installing testing/linting dependencies
+          pip install flake8 pytest
+
+      - name: Lint with flake8
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings. 
+          flake8 . --count --exit-zero --max-complexity=15 --max-line-length=120 --statistics
+
+      - name: Validate Python Compilation (Syntax Check)
+        run: |
+          # Compiles all python files to ensure there are no basic syntax errors
+          python -m compileall .
+
+      # Note: Uncomment the block below once you add unit tests (e.g., test_engine.py)
+      # - name: Run Unit Tests
+      #   run: |
+      #     pytest -v
+      
